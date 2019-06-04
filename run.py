@@ -11,7 +11,6 @@ from utils.sort import Sort
 def cap_worker(queue):
     while True:
         cap = cv2.VideoCapture()
-        # cap.open("http://consumer:IyKv4uY7%g^8@10.199.51.162/axis-cgi/mjpg/video.cgi?resolution=1920x1080")
         cap.open(
             "rtsp://consumer:IyKv4uY7%g^8@10.199.51.162/axis-media/media.amp?streamprofile=H264-OpenCV-Optimized")
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
