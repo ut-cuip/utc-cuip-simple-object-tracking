@@ -94,7 +94,7 @@ def main(queue):
                     frame,
                     (int(bbox[0]), int(bbox[1])),
                     (int(bbox[2]), int(bbox[3])),
-                    (255, 255, 255),
+                    trk.color,
                     2,
                 )
                 cv2.putText(
@@ -103,13 +103,13 @@ def main(queue):
                     (int(bbox[0]), int(bbox[1]) - 12),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.0005 * frame.shape[0],
-                    (255, 255, 255),
+                    trk.color,
                     2,
                 )
                 for location in trk.locations:
                     x1, y1, x2, y2 = location[1]
                     cv2.circle(frame, (((int(x1) + int(x2))//2),
-                                       int(y2)), 2, (255, 255, 255))
+                                       int(y2)), 3, trk.color, -1)
                     del x1, y1, x2, y2
 
                 del t, bbox
