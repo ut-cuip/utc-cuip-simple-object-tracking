@@ -1,3 +1,4 @@
+import datetime
 import multiprocessing
 import time
 
@@ -6,10 +7,20 @@ import numpy as np
 
 from pytorch_yolo.yolo import YOLO
 from utils.sort import Sort
-from utils.utils import midpoint, distance
+from utils.utils import *
 
 
-def cap_worker(queue):
+def writing_worker(write_queue):
+    while True:
+        try:
+            frame = write_queue.get(block=True)
+            # cv2.imwrite("output/{}.png".format(datetime.datetime.now()), frame)
+            del frame
+        except KeyboardInterrupt:
+            break
+
+
+def cap_worker(cap_queue):
     while True:
         cap = cv2.VideoCapture()
         cap.open(
@@ -24,12 +35,12 @@ def cap_worker(queue):
                 time.sleep(10)
                 break
             else:
-                queue.put(frame, block=True)
+                cap_queue.put(frame, block=True)
 
 
-def main(queue):
+def main(cap_queue, write_queue):
     yolo = YOLO()
-    sort = Sort()
+    sort = Sort(iou_threshold=.1)
     whitelist = [
         "person",
         "bicycle",
@@ -52,10 +63,8 @@ def main(queue):
     ]
     frames = 0
     while True:
-        frame = queue.get(block=True)
+        frame = cap_queue.get(block=True)
         frames += 1
-        # if frames % 2 == 0:
-        #     continue
         outputs = yolo.get_results(frame)
         detections = []
         labels = []
@@ -81,7 +90,7 @@ def main(queue):
 
         if detections.shape[0] > 0:
             try:
-                alive, dead = sort.update(detections, labels)
+                alive, _ = sort.update(detections, labels)
             except IndexError:
                 del frame, detections, labels
                 continue
@@ -114,42 +123,46 @@ def main(queue):
                         frame, (((int(x1) + int(x2)) // 2), int(y2)), 3, trk.color, -1
                     )
                     del x1, y1, x2, y2
-                if len(alive) > 1:
-                    distances = []
-                    for trk2 in alive:
-                        if(trk == trk2):
-                            continue
-                        t2 = trk2.get_state()[0]
-                        try:
-                            bbox2 = [int(t2[0]), int(t2[1]), int(t2[2]), int(t2[3])]
-                        except ValueError:
-                            continue
 
-                        d = distance(bbox, bbox2)
-                        if d in distances:
-                            continue
-                        else:
-                            distances.append(d)
-                        threshold = 100
-                        color = (255, 255, 255) if d > threshold else (0, 0, 255)
-                        cv2.line(
-                            frame,
-                            ((bbox[0] + bbox[2]) // 2, int(bbox[3])),
-                            ((bbox2[0] + bbox2[2]) // 2, int(bbox2[3])),
-                            color,
-                            2,
-                        )
-                        cv2.putText(
-                            frame,
-                            str(d),
-                            midpoint(bbox, bbox2),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.0005 * frame.shape[0],
-                            color,
-                            2,
-                        )
-                        del d, color, threshold
-                    del distances
+                # should_save = False
+
+                # if len(alive) > 1:
+                #     for trk2 in alive:
+                #         if trk == trk2:
+                #             continue
+                #         t2 = trk2.get_state()[0]
+                #         try:
+                #             bbox2 = [int(t2[0]), int(t2[1]), int(t2[2]), int(t2[3])]
+                #         except ValueError:
+                #             continue
+
+                #         d = distance(bbox, bbox2)
+                #         h = horizontal_distance(bbox, bbox2)
+                #         v = vertical_distance(bbox, bbox2)
+                #         threshold = (50, 50)
+                #         color = (255, 255, 255) if (h > threshold[0] or v > threshold[1]) else (0, 0, 255)
+                #         if h < threshold[0] and v < threshold[1]:
+                #             print(h, v)    
+                #             should_save = True
+                #         cv2.line(
+                #             frame,
+                #             ((bbox[0] + bbox[2]) // 2, int(bbox[3])),
+                #             ((bbox2[0] + bbox2[2]) // 2, int(bbox2[3])),
+                #             color,
+                #             2,
+                #         )
+                #         cv2.putText(
+                #             frame,
+                #             str(d),
+                #             midpoint(bbox, bbox2),
+                #             cv2.FONT_HERSHEY_SIMPLEX,
+                #             0.0005 * frame.shape[0],
+                #             color,
+                #             2,
+                #         )
+                #         del d, color, threshold
+                # if should_save:
+                #     write_queue.put(frame)
 
                 del t, bbox
             cv2.imshow("Object Tracking", frame)
@@ -160,10 +173,12 @@ def main(queue):
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
-    queue = multiprocessing.Queue(1)
+    cap_queue = multiprocessing.Queue(1)
+    write_queue = multiprocessing.Queue(1)
     processes = []
-    processes.append(multiprocessing.Process(target=main, args=(queue,)))
-    processes.append(multiprocessing.Process(target=cap_worker, args=(queue,)))
+    processes.append(multiprocessing.Process(target=main, args=(cap_queue, write_queue)))
+    processes.append(multiprocessing.Process(target=cap_worker, args=(cap_queue,)))
+    processes.append(multiprocessing.Process(target=writing_worker, args=(write_queue,)))
 
     try:
         for process in processes:

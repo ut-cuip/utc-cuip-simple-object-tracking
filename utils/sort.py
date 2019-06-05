@@ -221,12 +221,13 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
 
 
 class Sort(object):
-    def __init__(self, max_age=1, min_hits=3):
+    def __init__(self, max_age=1, min_hits=3, iou_threshold=0.1):
         """
         Sets key parameters for SORT
         """
         self.max_age = max_age
         self.min_hits = min_hits
+        self.iou_threshold = iou_threshold
         self.trackers = []
         self.frame_count = 0
         self.count = 0
@@ -255,10 +256,9 @@ class Sort(object):
                 to_del.append(t)
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
         for t in reversed(to_del):
-            # self.trackers.pop(t)
             dead.append(self.trackers.pop(t))
         matched, unmatched_dets, unmatched_trks = associate_detections_to_trackers(
-            dets, trks
+            dets, trks, iou_threshold=self.iou_threshold
         )
 
         # update matched trackers with assigned detections
