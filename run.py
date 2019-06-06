@@ -7,20 +7,22 @@ import numpy as np
 
 from pytorch_yolo.yolo import YOLO
 from utils.sort import Sort
-from utils.utils import *
+from utils.utils import distance, horizontal_distance, midpoint, vertical_distance
 
 
-# def writing_worker(write_queue):
-#     last_write = time.time()
-#     while True:
-#         try:
-#             frame = write_queue.get(block=True)
-#             if time.time() - last_write >= 2: # only write every two seconds to avoid overfilling the disk
-#                 cv2.imwrite("output/{}.png".format(datetime.datetime.now()), frame)
-#                 last_write = time.time()
-#             del frame
-#         except KeyboardInterrupt:
-#             break
+def writing_worker(write_queue):
+    last_write = time.time()
+    while True:
+        try:
+            frame = write_queue.get(block=True)
+            if (
+                time.time() - last_write >= 2
+            ):  # only write every two seconds to avoid overfilling the disk
+                cv2.imwrite("output/{}.png".format(datetime.datetime.now()), frame)
+                last_write = time.time()
+            del frame
+        except KeyboardInterrupt:
+            break
 
 
 def cap_worker(cap_queue):
@@ -38,10 +40,11 @@ def cap_worker(cap_queue):
                 time.sleep(10)
                 break
             else:
+                frame = frame[128:frame.shape[0], 0:frame.shape[1]]
                 cap_queue.put(frame, block=True)
 
 
-def main(cap_queue):
+def main(cap_queue, write_queue):
     yolo = YOLO()
     sort = Sort(iou_threshold=0.05)
     whitelist = [
@@ -90,6 +93,7 @@ def main(cap_queue):
         del outputs
 
         detections = np.array(detections)
+        should_write = False
 
         if detections.shape[0] > 0:
             try:
@@ -127,6 +131,7 @@ def main(cap_queue):
                     )
                     del x1, y1, x2, y2
 
+
                 if len(alive) > 1:
                     for trk2 in alive:
                         if trk == trk2:
@@ -142,6 +147,7 @@ def main(cap_queue):
                         v = vertical_distance(bbox, bbox2)
                         threshold = (50, 50)
                         if h < threshold[0] and v < threshold[1]:
+                            should_write = True
                             cv2.line(
                                 frame,
                                 ((bbox[0] + bbox[2]) // 2, int(bbox[3])),
@@ -161,24 +167,31 @@ def main(cap_queue):
                         del d, h, v, threshold
 
                 del t, bbox
-            cv2.imshow("Object Tracking", frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                raise KeyboardInterrupt
-            elif key == ord("s"):
-                cv2.imwrite("saves/{}.png".format(datetime.datetime.now()), frame)
+
+        cv2.imshow("Object Tracking", frame)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            raise KeyboardInterrupt
+        elif key == ord("s"):
+            write_queue.put(frame)
+
+        if should_write:
+            write_queue.put(frame)
+        del should_write
 
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     cap_queue = multiprocessing.Queue(1)
-    # write_queue = multiprocessing.Queue(1)
+    write_queue = multiprocessing.Queue(1)
     processes = []
-    processes.append(multiprocessing.Process(target=main, args=(cap_queue,)))
+    processes.append(
+        multiprocessing.Process(target=main, args=(cap_queue, write_queue))
+    )
     processes.append(multiprocessing.Process(target=cap_worker, args=(cap_queue,)))
-    # processes.append(
-    #     multiprocessing.Process(target=writing_worker, args=(write_queue,))
-    # )
+    processes.append(
+        multiprocessing.Process(target=writing_worker, args=(write_queue,))
+    )
 
     try:
         for process in processes:
