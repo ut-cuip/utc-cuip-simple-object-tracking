@@ -40,12 +40,21 @@ def cap_worker(cap_queue):
                 time.sleep(10)
                 break
             else:
-                frame = frame[128:frame.shape[0], 0:frame.shape[1]]
-                cap_queue.put(frame, block=True)
+                frame = frame[128 : frame.shape[0], 0 : frame.shape[1]]
+                original_dim = frame.shape
+                dimension = (
+                    frame.shape[0]
+                    if (frame.shape[0] > frame.shape[1])
+                    else frame.shape[1]
+                )
+                tmp = np.zeros((dimension, dimension, 3), np.uint8)
+                tmp[0 : original_dim[0]] = frame
+                del frame
+                cap_queue.put((tmp, original_dim), block=True)
 
 
 def main(cap_queue, write_queue):
-    yolo = YOLO()
+    yolo = YOLO(res="1024")
     sort = Sort(iou_threshold=0.05)
     whitelist = [
         "person",
@@ -69,7 +78,7 @@ def main(cap_queue, write_queue):
     ]
     frames = 0
     while True:
-        frame = cap_queue.get(block=True)
+        frame, original_dim = cap_queue.get(block=True)
         frames += 1
         outputs = yolo.get_results(frame)
         detections = []
@@ -131,7 +140,6 @@ def main(cap_queue, write_queue):
                     )
                     del x1, y1, x2, y2
 
-
                 if len(alive) > 1:
                     for trk2 in alive:
                         if trk == trk2:
@@ -168,15 +176,15 @@ def main(cap_queue, write_queue):
 
                 del t, bbox
 
-        cv2.imshow("Object Tracking", frame)
+        cv2.imshow("Object Tracking", frame[0:original_dim[0], 0:original_dim[1]])
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             raise KeyboardInterrupt
         elif key == ord("s"):
-            write_queue.put(frame)
+            write_queue.put(frame[0:original_dim[0], 0:original_dim[1]])
 
         if should_write:
-            write_queue.put(frame)
+            write_queue.put(frame[0:original_dim[0], 0:original_dim[1]])
         del should_write
 
 
