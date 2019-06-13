@@ -188,7 +188,7 @@ def main(cap_queue, write_queue):
         del should_write
 
 
-if __name__ == "__main__":
+def init():
     multiprocessing.set_start_method("spawn", force=True)
     cap_queue = multiprocessing.Queue(1)
     write_queue = multiprocessing.Queue(1)
