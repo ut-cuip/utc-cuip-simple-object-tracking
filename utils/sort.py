@@ -132,7 +132,11 @@ class KalmanBoxTracker(object):
         self.counted = False
         self.locations = []
         self.creation_time = int(datetime.now().timestamp() * 1000)
-        self.color = (random.randint(0, 256), random.randint(0, 256), random.randint(0, 256))
+        self.color = (
+            random.randint(0, 256),
+            random.randint(0, 256),
+            random.randint(0, 256),
+        )
 
     def update(self, bbox):
         """
