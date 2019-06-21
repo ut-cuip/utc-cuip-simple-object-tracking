@@ -1,30 +1,46 @@
 from utils.utils import distance_from_bb, distance_from_xy
-import datetime
 
 
-def predict_location(trk, velocity, dt=1):
+def predict_location(trk, amount_to_predict=2):
     """
         Predicts the future location at 'time'
         Args:
             trk (sort.KalmanBoxTracker): the tracker
-            velocity (float): the velocity of trk
-            dt (int): delta in time (in seconds)
+            steps_backward (int): the number of locations to look previously to determine the location
     """
-    timestamp, location = trk.locations[-1]
-    pred_x = ((location[0] + location[2]) / 2) + (velocity * dt)
-    pred_y = location[3] + (velocity * dt)
+    current_timestamp, current_location = trk.locations[-1]
+    # Return if there are less than 10 locations because of how we want this to work
+    if len(trk.locations) < amount_to_predict:
+        center_x = (current_location[0] + current_location[2]) / 2
+        center_y = (current_location[1] + current_location[3]) / 2
+        return (center_x, center_y)
+
+    prev_timestamp, prev_hitbox = trk.locations[-amount_to_predict]
+    dt = (current_timestamp - prev_timestamp) / 1000
+    vel_x, vel_y = velocity(trk, steps_backward=amount_to_predict)
+
+    pred_x = ((current_location[0] + current_location[2]) / 2) - (vel_x * dt)
+    pred_y = ((current_location[1] + current_location[3]) / 2) - (vel_y * dt)
     return (pred_x, pred_y)
 
 
-def velocity(trk):
+def velocity(trk, steps_backward=2):
     """
         Calculates the velocity of said tracker, in px/s
         Args:
-            trk (sort.KalmanBoxTracker)
+            trk (sort.KalmanBoxTracker): the tracker
+            steps_backward (int): the number of locations to look previously to determine the velocity
+        returns:
+            The speed of the tracked object
     """
-    prev_timestamp, prev_hitbox = trk.locations[-2]
+    # Return 0 if there aren't enough locations
+    # to be able to create velocity with
+    if len(trk.locations) < steps_backward:
+        return 0
+    prev_timestamp, prev_hitbox = trk.locations[-steps_backward]
     current_timestamp, current_hitbox = trk.locations[-1]
-    dt = current_timestamp - prev_timestamp
+    # Divide by 1000 because of how we store the unix ts
+    dt = (current_timestamp - prev_timestamp) / 1000
 
     vel_x = (
         ((prev_hitbox[0] + prev_hitbox[2]) / 2)
@@ -33,10 +49,10 @@ def velocity(trk):
 
     vel_y = (prev_hitbox[3] - current_hitbox[3]) / dt
 
-    return (vel_x + vel_y) / 2
+    return (vel_x, vel_y)
 
 
-def time_til_collision(trk1, trk2, threshold=30):
+def time_til_collision(trk1, trk2, threshold=10):
     """
         Determines if two trackers should collide
         Args:
@@ -46,17 +62,13 @@ def time_til_collision(trk1, trk2, threshold=30):
             -1 if no collision
             ttc if collision is possible
     """
-    if len(trk1.get_state()) < 2 or len(trk2.get_state()) < 2:
-        print("trk1 or trk2 had too few points to calculate velocity.")
+    if len(trk1.get_state()) < threshold or len(trk2.get_state()) < threshold:
         return -1
 
-    vel_trk1 = velocity(trk1)
-    vel_trk2 = velocity(trk2)
-    known_distance = distance_from_bb(trk1.locations[-1], trk2.locations[-1])
-
-    pred_trk1_pos = predict_location(trk1, vel_trk1)
-    pred_trk2_pos = predict_location(trk2, vel_trk2)
+    pred_trk1_pos = predict_location(trk1, amount_to_predict=threshold)
+    pred_trk2_pos = predict_location(trk2, amount_to_predict=threshold)
     pred_distance = distance_from_xy(pred_trk1_pos, pred_trk2_pos)
+    known_distance = distance_from_bb(trk1.locations[-1], trk2.locations[-1])
 
     # If distance is decreasing...
     if known_distance > pred_distance:
