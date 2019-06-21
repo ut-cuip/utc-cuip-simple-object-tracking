@@ -62,13 +62,13 @@ def time_til_collision(trk1, trk2, threshold=10):
             -1 if no collision
             ttc if collision is possible
     """
-    if len(trk1.get_state()) < threshold or len(trk2.get_state()) < threshold:
+    if len(trk1.locations) < threshold or len(trk2.locations) < threshold:
         return -1
 
     pred_trk1_pos = predict_location(trk1, amount_to_predict=threshold)
     pred_trk2_pos = predict_location(trk2, amount_to_predict=threshold)
     pred_distance = distance_from_xy(pred_trk1_pos, pred_trk2_pos)
-    known_distance = distance_from_bb(trk1.locations[-1], trk2.locations[-1])
+    known_distance = distance_from_bb(trk1.locations[-1][1], trk2.locations[-1][1])
 
     # If distance is decreasing...
     if known_distance > pred_distance:

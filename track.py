@@ -156,12 +156,16 @@ def main(cap_queue, write_queue):
                         if trk.id == trk2.id:
                             continue
                     ttc = time_til_collision(trk, trk2)
-                    if ttc > 0:
+                    ttc_thresh = 5
+                    if ttc > 0 and ttc < ttc_thresh:
                         trk.old_color = trk.color
                         trk.color = (0, 0, 255)
                         trk2.old_color = trk2.color
                         trk2.color = (0, 0, 255)
-                        print("Potential accident between ID {} and {}.\nTTC:{}".format(trk.id, trk2.id, ttc))
+                        
+                        print("Potential accident between ID {} and {}.\nTTC:{}s".format(trk.id, trk2.id, ttc))
+                        cv2.imwrite("../incidents/{}.jpg".format(datetime.datetime.now()), frame)
+                    del ttc_thresh, ttc
 
                 del t, bbox, pred_x, pred_y, center_x, center_y
 
