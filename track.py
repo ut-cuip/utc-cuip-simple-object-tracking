@@ -8,6 +8,7 @@ import numpy as np
 from pytorch_yolo.yolo import YOLO
 from utils.sort import Sort
 from trajectory import predict_location, time_til_collision
+from utils.utils import distance_from_xy
 
 
 def writing_worker(write_queue):
@@ -18,7 +19,9 @@ def writing_worker(write_queue):
             if (
                 time.time() - last_write >= 2
             ):  # only write every two seconds to avoid overfilling the disk
-                cv2.imwrite("output/{}.png".format(datetime.datetime.now()), frame)
+                cv2.imwrite(
+                    "../incidents/{}.png".format(datetime.datetime.now()), frame
+                )
                 last_write = time.time()
             del frame
         except KeyboardInterrupt:
@@ -151,6 +154,11 @@ def main(cap_queue, write_queue):
                     trk.color,
                     8,
                 )
+                # text = "{}".format(
+                #     distance_from_xy((center_x, center_y), (int(pred_x), int(pred_y)))
+                # )
+                # midpoint = ((center_x + pred_x) // 2, (center_y + pred_y) // 2)
+                # cv2.putText(frame, text, (int(midpoint[0]), int(midpoint[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, trk.color)
                 if len(alive) > 1:
                     for trk2 in alive:
                         if trk.id == trk2.id:
@@ -158,21 +166,29 @@ def main(cap_queue, write_queue):
                     ttc = time_til_collision(trk, trk2)
                     ttc_thresh = 5
                     if ttc > 0 and ttc < ttc_thresh:
-                        trk.old_color = trk.color
-                        trk.color = (0, 0, 255)
-                        trk2.old_color = trk2.color
-                        trk2.color = (0, 0, 255)
-                        
-                        print("Potential accident between ID {} and {}.\nTTC:{}s".format(trk.id, trk2.id, ttc))
+
+                        print(
+                            "Potential accident between ID {} and {}.\nTTC:{}s".format(
+                                trk.id, trk2.id, ttc
+                            )
+                        )
+                        cv2.putText(
+                            frame,
+                            "ID {} and {} have TTC {}".format(trk.id, trk2.id, ttc),
+                            (0, 20),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 0, 255),
+                        )
                         should_write = True
                     del ttc_thresh, ttc
-                
 
-                del t, bbox, pred_x, pred_y, center_x, center_y, should_write
+                del t, bbox, pred_x, pred_y, center_x, center_y
             if should_write:
-                cv2.imwrite("../incidents/{}.jpg".format(datetime.datetime.now()), frame)
+                write_queue.put(frame[0 : original_dim[0], 0 : original_dim[1]])
 
         cv2.imshow("Object Tracking", frame[0 : original_dim[0], 0 : original_dim[1]])
+
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             raise KeyboardInterrupt
