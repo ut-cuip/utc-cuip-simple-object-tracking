@@ -111,6 +111,7 @@ def main(cap_queue, write_queue):
                 del frame, detections, labels
                 continue
 
+            should_write = False
             for trk in alive:
                 t = trk.get_state()[0]
                 try:
@@ -150,7 +151,6 @@ def main(cap_queue, write_queue):
                     trk.color,
                     8,
                 )
-
                 if len(alive) > 1:
                     for trk2 in alive:
                         if trk.id == trk2.id:
@@ -164,10 +164,13 @@ def main(cap_queue, write_queue):
                         trk2.color = (0, 0, 255)
                         
                         print("Potential accident between ID {} and {}.\nTTC:{}s".format(trk.id, trk2.id, ttc))
-                        cv2.imwrite("../incidents/{}.jpg".format(datetime.datetime.now()), frame)
+                        should_write = True
                     del ttc_thresh, ttc
+                
 
-                del t, bbox, pred_x, pred_y, center_x, center_y
+                del t, bbox, pred_x, pred_y, center_x, center_y, should_write
+            if should_write:
+                cv2.imwrite("../incidents/{}.jpg".format(datetime.datetime.now()), frame)
 
         cv2.imshow("Object Tracking", frame[0 : original_dim[0], 0 : original_dim[1]])
         key = cv2.waitKey(1) & 0xFF
