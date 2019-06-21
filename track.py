@@ -7,7 +7,7 @@ import numpy as np
 
 from pytorch_yolo.yolo import YOLO
 from utils.sort import Sort
-from utils.utils import distance, horizontal_distance, midpoint, vertical_distance
+from trajectory import predict_location, time_til_collision
 
 
 def writing_worker(write_queue):
@@ -140,55 +140,41 @@ def main(cap_queue, write_queue):
                     )
                     del x1, y1, x2, y2
 
+                pred_x, pred_y = predict_location(trk, amount_to_predict=10)
+                center_x = (int(bbox[0]) + int(bbox[2])) // 2
+                center_y = (int(bbox[1]) + int(bbox[3])) // 2
+                cv2.line(
+                    frame,
+                    (int(pred_x), int(pred_y)),
+                    (center_x, center_y),
+                    trk.color,
+                    8,
+                )
+
                 if len(alive) > 1:
                     for trk2 in alive:
-                        if trk == trk2:
+                        if trk.id == trk2.id:
                             continue
-                        t2 = trk2.get_state()[0]
-                        try:
-                            bbox2 = [int(t2[0]), int(t2[1]), int(t2[2]), int(t2[3])]
-                        except ValueError:
-                            continue
+                    ttc = time_til_collision(trk, trk2)
+                    if ttc > 0:
+                        trk.old_color = trk.color
+                        trk.color = (0, 0, 255)
+                        trk2.old_color = trk2.color
+                        trk2.color = (0, 0, 255)
+                        print("Potential accident between ID {} and {}.\nTTC:{}".format(trk.id, trk2.id, ttc))
 
-                        d = distance(bbox, bbox2)
-                        h = horizontal_distance(bbox, bbox2)
-                        v = vertical_distance(bbox, bbox2)
-                        threshold = (50, 50)
-                        if h < threshold[0] and v < threshold[1]:
-                            should_write = True
-                            cv2.line(
-                                frame,
-                                ((bbox[0] + bbox[2]) // 2, int(bbox[3])),
-                                ((bbox2[0] + bbox2[2]) // 2, int(bbox2[3])),
-                                (0, 0, 255),
-                                2,
-                            )
-                            cv2.putText(
-                                frame,
-                                str(d),
-                                midpoint(bbox, bbox2),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                0.0005 * frame.shape[0],
-                                (0, 0, 255),
-                                2,
-                            )
-                        del d, h, v, threshold
+                del t, bbox, pred_x, pred_y, center_x, center_y
 
-                del t, bbox
-
-        cv2.imshow("Object Tracking", frame[0:original_dim[0], 0:original_dim[1]])
+        cv2.imshow("Object Tracking", frame[0 : original_dim[0], 0 : original_dim[1]])
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             raise KeyboardInterrupt
         elif key == ord("s"):
-            write_queue.put(frame[0:original_dim[0], 0:original_dim[1]])
-
-        if should_write:
-            write_queue.put(frame[0:original_dim[0], 0:original_dim[1]])
+            write_queue.put(frame[0 : original_dim[0], 0 : original_dim[1]])
         del should_write
 
 
-def init():
+if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     cap_queue = multiprocessing.Queue(1)
     write_queue = multiprocessing.Queue(1)
