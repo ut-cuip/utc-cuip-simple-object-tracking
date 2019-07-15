@@ -11,23 +11,6 @@ from trajectory import predict_location, time_til_collision
 from utils.utils import distance_from_xy
 
 
-def writing_worker(write_queue):
-    last_write = time.time()
-    while True:
-        try:
-            frame = write_queue.get(block=True)
-            if (
-                time.time() - last_write >= 2
-            ):  # only write every two seconds to avoid overfilling the disk
-                cv2.imwrite(
-                    "../incidents/{}.png".format(datetime.datetime.now()), frame
-                )
-                last_write = time.time()
-            del frame
-        except KeyboardInterrupt:
-            break
-
-
 def cap_worker(cap_queue):
     while True:
         cap = cv2.VideoCapture()
@@ -56,7 +39,8 @@ def cap_worker(cap_queue):
                 cap_queue.put((tmp, original_dim), block=True)
 
 
-def main(cap_queue, write_queue):
+def main(cap_queue):
+    
     yolo = YOLO(res="1024")
     sort = Sort(iou_threshold=0.05)
     whitelist = [
@@ -184,31 +168,23 @@ def main(cap_queue, write_queue):
                     del ttc_thresh, ttc
 
                 del t, bbox, pred_x, pred_y, center_x, center_y
-            if should_write:
-                write_queue.put(frame[0 : original_dim[0], 0 : original_dim[1]])
-
+        # write_queue.put(frame[0 : original_dim[0], 0 : original_dim[1]])
         cv2.imshow("Object Tracking", frame[0 : original_dim[0], 0 : original_dim[1]])
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord("q"):
             raise KeyboardInterrupt
-        elif key == ord("s"):
-            write_queue.put(frame[0 : original_dim[0], 0 : original_dim[1]])
         del should_write
 
 
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     cap_queue = multiprocessing.Queue(1)
-    write_queue = multiprocessing.Queue(1)
     processes = []
     processes.append(
-        multiprocessing.Process(target=main, args=(cap_queue, write_queue))
+        multiprocessing.Process(target=main, args=(cap_queue,))
     )
     processes.append(multiprocessing.Process(target=cap_worker, args=(cap_queue,)))
-    processes.append(
-        multiprocessing.Process(target=writing_worker, args=(write_queue,))
-    )
 
     try:
         for process in processes:
