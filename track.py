@@ -7,7 +7,6 @@ import numpy as np
 
 from pytorch_yolo.yolo import YOLO
 from utils.sort import Sort
-from trajectory import predict_location, time_til_collision
 from utils.utils import distance_from_xy
 
 
@@ -40,7 +39,7 @@ def cap_worker(cap_queue):
 
 
 def main(cap_queue):
-    
+
     yolo = YOLO(res="1024")
     sort = Sort(iou_threshold=0.05)
     whitelist = [
@@ -63,10 +62,8 @@ def main(cap_queue):
         "handbag",
         "suitcase",
     ]
-    frames = 0
     while True:
         frame, original_dim = cap_queue.get(block=True)
-        frames += 1
         outputs = yolo.get_results(frame)
         detections = []
         labels = []
@@ -128,46 +125,8 @@ def main(cap_queue):
                     )
                     del x1, y1, x2, y2
 
-                pred_x, pred_y = predict_location(trk, amount_to_predict=10)
-                center_x = (int(bbox[0]) + int(bbox[2])) // 2
-                center_y = (int(bbox[1]) + int(bbox[3])) // 2
-                cv2.line(
-                    frame,
-                    (int(pred_x), int(pred_y)),
-                    (center_x, center_y),
-                    trk.color,
-                    8,
-                )
-                # text = "{}".format(
-                #     distance_from_xy((center_x, center_y), (int(pred_x), int(pred_y)))
-                # )
-                # midpoint = ((center_x + pred_x) // 2, (center_y + pred_y) // 2)
                 # cv2.putText(frame, text, (int(midpoint[0]), int(midpoint[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, trk.color)
-                if len(alive) > 1:
-                    for trk2 in alive:
-                        if trk.id == trk2.id:
-                            continue
-                    ttc = time_til_collision(trk, trk2)
-                    ttc_thresh = 5
-                    if ttc > 0 and ttc < ttc_thresh:
-
-                        print(
-                            "Potential accident between ID {} and {}.\nTTC:{}s".format(
-                                trk.id, trk2.id, ttc
-                            )
-                        )
-                        cv2.putText(
-                            frame,
-                            "ID {} and {} have TTC {}".format(trk.id, trk2.id, ttc),
-                            (0, 20),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            1,
-                            (0, 0, 255),
-                        )
-                        should_write = True
-                    del ttc_thresh, ttc
-
-                del t, bbox, pred_x, pred_y, center_x, center_y
+                del t, bbox
         # write_queue.put(frame[0 : original_dim[0], 0 : original_dim[1]])
         cv2.imshow("Object Tracking", frame[0 : original_dim[0], 0 : original_dim[1]])
 
@@ -181,9 +140,7 @@ if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     cap_queue = multiprocessing.Queue(1)
     processes = []
-    processes.append(
-        multiprocessing.Process(target=main, args=(cap_queue,))
-    )
+    processes.append(multiprocessing.Process(target=main, args=(cap_queue,)))
     processes.append(multiprocessing.Process(target=cap_worker, args=(cap_queue,)))
 
     try:
